@@ -68,6 +68,22 @@ python app.py
 # open http://127.0.0.1:5000
 ```
 
+## Hosting caveat: YouTube blocks datacenter IPs
+
+Downloads work reliably from a home/residential IP. On cloud hosts (Render,
+AWS, etc.) YouTube often blocks anonymous requests with "Sign in to confirm
+you're not a bot", so every track can fail there even though the same code
+works locally. The reliable workaround is to supply cookies from a logged-in
+YouTube session:
+
+1. Export `cookies.txt` (Netscape format) from a browser where you're signed
+   in to YouTube (e.g. a "Get cookies.txt" extension).
+2. On Render: **Environment → Secret Files**, add the file (e.g. mounted at
+   `/etc/secrets/cookies.txt`), and set `YTDLP_COOKIEFILE` to that path.
+
+Cookies expire periodically and need re-exporting. Without them, the hosted
+app may only work intermittently.
+
 ## Deploy to Render
 
 The included `Dockerfile` installs ffmpeg, so deploy as a **Docker** service.

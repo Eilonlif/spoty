@@ -7,11 +7,18 @@ lets ffmpeg transcode it to a tagged MP3.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import yt_dlp
 
 from .spotify_client import Track
+
+# Optional path to a Netscape-format cookies.txt exported from a logged-in
+# YouTube session. On datacenter IPs (e.g. cloud hosts) YouTube often blocks
+# anonymous requests ("Sign in to confirm you're not a bot"); supplying cookies
+# is the most reliable way around it. Set YTDLP_COOKIEFILE to use one.
+_COOKIE_FILE = os.getenv("YTDLP_COOKIEFILE")
 
 
 class DownloadError(Exception):
@@ -74,6 +81,8 @@ class Downloader:
                 "-metadata", f"album={track.album}",
             ],
         }
+        if _COOKIE_FILE:
+            options["cookiefile"] = _COOKIE_FILE
 
         try:
             with yt_dlp.YoutubeDL(options) as ydl:

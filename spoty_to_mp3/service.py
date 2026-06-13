@@ -64,6 +64,7 @@ def run_conversion(
 
         mp3_paths: list[Path] = []
         failures: list[str] = []
+        first_error: str | None = None
         for index, track in enumerate(resolved.tracks, start=1):
             registry.update(
                 job_id,
@@ -74,14 +75,18 @@ def run_conversion(
                 mp3_paths.append(downloader.download(track))
             except DownloadError as exc:
                 failures.append(track.search_query)
+                if first_error is None:
+                    first_error = str(exc)
                 registry.update(job_id, message=f"Skipped: {exc}")
             finally:
                 registry.update(job_id, completed=index)
 
         if not mp3_paths:
+            # Surface the actual reason (e.g. YouTube's bot wall) instead of
+            # just listing track names.
             raise DownloadError(
                 "None of the tracks could be downloaded. "
-                + (f"Failed: {', '.join(failures)}" if failures else "")
+                f"Reason: {first_error or 'unknown error'}"
             )
 
         result_path, result_name = _package(resolved, mp3_paths, job_dir)
