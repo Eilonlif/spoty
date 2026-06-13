@@ -124,6 +124,14 @@ class SpotifyClient:
                     "Reading playlist tracks requires connecting your Spotify "
                     "account. Click “Connect Spotify” and try again."
                 ) from exc
+            if exc.http_status == 403:
+                raise SpotifyError(
+                    "Spotify returned 403 (Forbidden). Your Spotify app is in "
+                    "Development Mode, so the account you logged in with must "
+                    "be added to the app's allowlist: Spotify Dashboard → your "
+                    "app → Settings → User Management → add your name and "
+                    "email, then retry."
+                ) from exc
             raise SpotifyError(f"Spotify API error: {exc.msg or exc}") from exc
 
     # -- per-kind resolvers -------------------------------------------------
