@@ -10,7 +10,22 @@ const progressBar = document.getElementById("progress-bar");
 const downloadLink = document.getElementById("download-link");
 
 const POLL_MS = 1500;
+// How many consecutive polling failures (e.g. a server restart, a dropped
+// connection, an empty response) to tolerate before giving up.
+const MAX_POLL_RETRIES = 5;
 let pollTimer = null;
+
+// Parse a fetch Response as JSON, tolerating empty/non-JSON bodies instead of
+// throwing the opaque "Unexpected end of JSON input".
+async function readJson(res) {
+  const text = await res.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { error: `Unexpected server response (HTTP ${res.status}).` };
+  }
+}
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -27,7 +42,7 @@ form.addEventListener("submit", async (event) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url }),
     });
-    const data = await res.json();
+    const data = await readJson(res);
     if (!res.ok) {
       throw new Error(data.error || "Could not start the conversion.");
     }
@@ -40,12 +55,14 @@ form.addEventListener("submit", async (event) => {
 
 function pollStatus(jobId) {
   clearInterval(pollTimer);
+  let retries = 0;
   pollTimer = setInterval(async () => {
     try {
       const res = await fetch(`/api/status/${jobId}`);
-      const job = await res.json();
+      const job = await readJson(res);
       if (!res.ok) throw new Error(job.error || "Lost track of the job.");
 
+      retries = 0; // a good response resets the failure counter
       updateProgress(job);
 
       if (job.status === "done") {
@@ -57,9 +74,14 @@ function pollStatus(jobId) {
         setBusy(false);
       }
     } catch (err) {
-      clearInterval(pollTimer);
-      showError(err.message);
-      setBusy(false);
+      // Transient failure (server restart, network blip): retry a few times
+      // before surfacing the error, so a momentary hiccup doesn't kill a job.
+      retries += 1;
+      if (retries > MAX_POLL_RETRIES) {
+        clearInterval(pollTimer);
+        showError(`${err.message} (giving up after ${MAX_POLL_RETRIES} retries)`);
+        setBusy(false);
+      }
     }
   }, POLL_MS);
 }

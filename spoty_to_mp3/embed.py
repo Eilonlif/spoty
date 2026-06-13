@@ -20,36 +20,45 @@ import requests
 from .spotify_client import LinkKind, ResolvedLink, SpotifyError, Track
 
 _EMBED_URL = "https://open.spotify.com/embed/playlist/{id}"
+# Tolerant of extra/reordered attributes on the script tag.
 _NEXT_DATA_RE = re.compile(
-    r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>',
+    r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>',
     re.DOTALL,
 )
 _HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; spoty-to-mp3/1.0)"}
+_ATTEMPTS = 4
+
+
+def _fetch_next_data(playlist_id: str) -> str:
+    """Fetch the embed page and return the raw __NEXT_DATA__ JSON string.
+
+    The embed CDN occasionally serves a page without the data blob, so retry
+    a few times before giving up.
+    """
+    url = _EMBED_URL.format(id=playlist_id)
+    last_problem = "no data"
+    for _ in range(_ATTEMPTS):
+        try:
+            resp = requests.get(url, headers=_HEADERS, timeout=30)
+            resp.raise_for_status()
+        except requests.RequestException as exc:
+            last_problem = str(exc)
+            continue
+        match = _NEXT_DATA_RE.search(resp.text)
+        if match:
+            return match.group(1)
+        last_problem = "data blob missing from page"
+    raise SpotifyError(
+        f"Couldn't read this playlist after {_ATTEMPTS} tries "
+        f"({last_problem}). It may be private or unavailable."
+    )
 
 
 def resolve_playlist_via_embed(playlist_id: str) -> ResolvedLink:
     """Resolve a public playlist's tracks from its embed page."""
-    url = _EMBED_URL.format(id=playlist_id)
+    raw = _fetch_next_data(playlist_id)
     try:
-        resp = requests.get(url, headers=_HEADERS, timeout=30)
-        resp.raise_for_status()
-    except requests.RequestException as exc:
-        raise SpotifyError(
-            f"Couldn't load the playlist's public page: {exc}"
-        ) from exc
-
-    match = _NEXT_DATA_RE.search(resp.text)
-    if not match:
-        raise SpotifyError(
-            "Couldn't read this playlist. It may be private or unavailable."
-        )
-
-    try:
-        entity = (
-            json.loads(match.group(1))["props"]["pageProps"]["state"]["data"][
-                "entity"
-            ]
-        )
+        entity = json.loads(raw)["props"]["pageProps"]["state"]["data"]["entity"]
     except (KeyError, ValueError) as exc:
         raise SpotifyError(
             "The playlist page had an unexpected format."

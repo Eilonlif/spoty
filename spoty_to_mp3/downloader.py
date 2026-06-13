@@ -21,15 +21,31 @@ class DownloadError(Exception):
 class Downloader:
     """Downloads tracks to MP3 using yt-dlp + ffmpeg."""
 
-    def __init__(self, output_dir: Path, audio_quality: str = "192") -> None:
+    def __init__(
+        self, output_dir: Path, audio_quality: str = "192", attempts: int = 3
+    ) -> None:
         self.output_dir = output_dir
         self.audio_quality = audio_quality
+        self.attempts = max(1, attempts)
 
     def download(self, track: Track) -> Path:
         """Download a single track and return the path to the MP3.
 
-        Raises DownloadError if no source is found or conversion fails.
+        Retries a few times on transient failures (network blips, throttling)
+        before giving up. Raises DownloadError if every attempt fails.
         """
+        last_error: Exception | None = None
+        for _ in range(self.attempts):
+            try:
+                return self._download_once(track)
+            except DownloadError as exc:
+                last_error = exc
+        raise DownloadError(
+            f"Couldn't download '{track.search_query}' after "
+            f"{self.attempts} attempts: {last_error}"
+        )
+
+    def _download_once(self, track: Track) -> Path:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         stem = track.filename_stem
         outtmpl = str(self.output_dir / f"{stem}.%(ext)s")

@@ -82,9 +82,10 @@ def parse_link(url: str) -> tuple[LinkKind, str]:
 class SpotifyClient:
     """Thin wrapper around spotipy for the metadata we need.
 
-    Wraps an already-authenticated ``spotipy.Spotify`` instance. Use the
-    factory helpers below to build one from either app-only credentials
-    (tracks/albums) or a user access token (required for playlists).
+    Wraps an authenticated ``spotipy.Spotify`` built from app-only
+    credentials. Tracks and albums come from the API; playlists are read
+    from the public embed page (the API only serves items for playlists the
+    user owns, which this app doesn't log in for).
     """
 
     def __init__(self, sp: "spotipy.Spotify") -> None:
@@ -104,38 +105,19 @@ class SpotifyClient:
         )
         return cls(spotipy.Spotify(auth_manager=auth))
 
-    @classmethod
-    def from_token(cls, access_token: str) -> "SpotifyClient":
-        """Build a client from a user access token (enables playlists)."""
-        return cls(spotipy.Spotify(auth=access_token))
-
-    def me(self) -> dict:
-        """Return the connected user's Spotify profile."""
-        return self._sp.me()
-
     def resolve(self, url: str) -> ResolvedLink:
         """Resolve a Spotify URL into its tracks."""
         kind, spotify_id = parse_link(url)
+        if kind is LinkKind.PLAYLIST:
+            # Read straight from the public embed page (no API auth needed).
+            from .embed import resolve_playlist_via_embed
+
+            return resolve_playlist_via_embed(spotify_id)
         try:
             if kind is LinkKind.TRACK:
                 return self._resolve_track(spotify_id)
-            if kind is LinkKind.PLAYLIST:
-                return self._resolve_playlist(spotify_id)
             return self._resolve_album(spotify_id)
         except spotipy.SpotifyException as exc:  # pragma: no cover - network
-            if exc.http_status == 401 and kind is LinkKind.PLAYLIST:
-                raise SpotifyError(
-                    "Reading playlist tracks requires connecting your Spotify "
-                    "account. Click “Connect Spotify” and try again."
-                ) from exc
-            if exc.http_status == 403:
-                raise SpotifyError(
-                    "Spotify returned 403 (Forbidden). Your Spotify app is in "
-                    "Development Mode, so the account you logged in with must "
-                    "be added to the app's allowlist: Spotify Dashboard → your "
-                    "app → Settings → User Management → add your name and "
-                    "email, then retry."
-                ) from exc
             raise SpotifyError(f"Spotify API error: {exc.msg or exc}") from exc
 
     # -- per-kind resolvers -------------------------------------------------
@@ -144,31 +126,6 @@ class SpotifyClient:
         data = self._sp.track(track_id)
         track = _track_from_api(data)
         return ResolvedLink(kind=LinkKind.TRACK, name=track.title, tracks=[track])
-
-    def _resolve_playlist(self, playlist_id: str) -> ResolvedLink:
-        # The API only returns items for playlists the user owns or
-        # collaborates on; others return 403. Fall back to the public embed
-        # page for those (see embed.resolve_playlist_via_embed).
-        try:
-            playlist = self._sp.playlist(playlist_id, fields="name")
-            name = playlist.get("name", "playlist")
-            tracks: list[Track] = []
-            results = self._sp.playlist_items(playlist_id)
-            while results:
-                for item in results["items"]:
-                    node = item.get("track")
-                    if node and node.get("type") == "track":
-                        tracks.append(_track_from_api(node))
-                results = self._sp.next(results) if results.get("next") else None
-        except spotipy.SpotifyException as exc:
-            if exc.http_status in (401, 403, 404):
-                from .embed import resolve_playlist_via_embed
-
-                return resolve_playlist_via_embed(playlist_id)
-            raise
-        if not tracks:
-            raise SpotifyError("That playlist has no playable tracks.")
-        return ResolvedLink(kind=LinkKind.PLAYLIST, name=name, tracks=tracks)
 
     def _resolve_album(self, album_id: str) -> ResolvedLink:
         album = self._sp.album(album_id)

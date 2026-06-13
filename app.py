@@ -4,18 +4,8 @@ from __future__ import annotations
 
 import threading
 
-from flask import (
-    Flask,
-    abort,
-    jsonify,
-    redirect,
-    render_template,
-    request,
-    send_file,
-    url_for,
-)
+from flask import Flask, abort, jsonify, render_template, request, send_file
 
-from spoty_to_mp3 import auth
 from spoty_to_mp3.config import load_config
 from spoty_to_mp3.jobs import JobRegistry, JobStatus
 from spoty_to_mp3.service import run_conversion
@@ -23,117 +13,13 @@ from spoty_to_mp3.service import run_conversion
 config = load_config()
 registry = JobRegistry()
 app = Flask(__name__)
-app.secret_key = config.secret_key
 
 
 @app.route("/")
 def index():
     return render_template(
-        "index.html",
-        spotify_configured=config.spotify_configured,
-        logged_in=auth.is_logged_in(config),
+        "index.html", spotify_configured=config.spotify_configured
     )
-
-
-@app.get("/login")
-def login():
-    """Send the user to Spotify to authorize, then back to /callback."""
-    return redirect(auth.make_oauth(config).get_authorize_url())
-
-
-@app.get("/callback")
-def callback():
-    """Exchange the auth code for a token, stored in the session."""
-    error = request.args.get("error")
-    if error:
-        return redirect(url_for("index"))
-    code = request.args.get("code")
-    if code:
-        # Caches the token in the Flask session via the cache handler.
-        auth.make_oauth(config).get_access_token(code, as_dict=False)
-    return redirect(url_for("index"))
-
-
-@app.get("/logout")
-def logout():
-    auth.logout()
-    return redirect(url_for("index"))
-
-
-@app.get("/api/diag")
-def diag():
-    """Probe what the current token can read. Pass ?url=<spotify playlist>.
-
-    Temporary diagnostic for the Development Mode 403 investigation.
-    """
-    import spotipy
-
-    from spoty_to_mp3.spotify_client import SpotifyClient, parse_link
-
-    token = auth.current_access_token(config)
-    if not token:
-        return jsonify(error="Not connected. Click Connect Spotify first."), 200
-    sp = SpotifyClient.from_token(token)._sp
-
-    url = request.args.get("url", "")
-    try:
-        _, pid = parse_link(url)
-    except Exception:
-        pid = "3yNXorluXHN102l7I8y00i"
-
-    def probe(fn):
-        try:
-            r = fn()
-            n = r.get("total") if isinstance(r, dict) else None
-            return {"ok": True, "total": n}
-        except spotipy.SpotifyException as exc:
-            return {"ok": False, "status": exc.http_status, "msg": exc.msg}
-        except Exception as exc:  # noqa: BLE001
-            return {"ok": False, "error": str(exc)}
-
-    return jsonify(
-        playlist_id=pid,
-        me=probe(lambda: sp.me()),
-        my_playlists=probe(lambda: sp.current_user_playlists(limit=1)),
-        playlist_meta=probe(lambda: sp.playlist(pid, fields="name")),
-        items_tracks_only=probe(
-            lambda: sp.playlist_items(pid, additional_types=("track",), limit=5)
-        ),
-        items_default=probe(lambda: sp.playlist_items(pid, limit=5)),
-    )
-
-
-@app.get("/api/me")
-def me():
-    """Report which Spotify account the current session is connected as.
-
-    Useful for diagnosing 403s: confirms the connected account matches the
-    one added to the app's Development Mode allowlist.
-    """
-    import spotipy
-
-    from spoty_to_mp3.spotify_client import SpotifyClient
-
-    token = auth.current_access_token(config)
-    if not token:
-        return jsonify(connected=False), 200
-    try:
-        profile = SpotifyClient.from_token(token).me()
-        return jsonify(
-            connected=True,
-            id=profile.get("id"),
-            display_name=profile.get("display_name"),
-            email=profile.get("email"),
-            product=profile.get("product"),
-        )
-    except spotipy.SpotifyException as exc:
-        return (
-            jsonify(
-                connected=True,
-                error=f"{exc.http_status} {exc.msg or exc}",
-            ),
-            200,
-        )
 
 
 @app.post("/api/convert")
@@ -152,14 +38,10 @@ def convert():
     if not url:
         return jsonify(error="Please paste a Spotify link."), 400
 
-    # The token must be read here (request context); the worker thread has no
-    # access to the Flask session. None means app-only (tracks/albums only).
-    access_token = auth.current_access_token(config)
-
     job = registry.create(url)
     thread = threading.Thread(
         target=run_conversion,
-        args=(job.id, url, config, registry, access_token),
+        args=(job.id, url, config, registry),
         daemon=True,
     )
     thread.start()

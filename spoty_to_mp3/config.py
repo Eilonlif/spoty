@@ -22,8 +22,6 @@ class Config:
 
     spotify_client_id: str
     spotify_client_secret: str
-    spotify_redirect_uri: str
-    secret_key: str
     download_dir: Path
     host: str
     port: int
@@ -48,19 +46,11 @@ def load_config() -> Config:
         download_dir = ROOT_DIR / download_dir
     download_dir.mkdir(parents=True, exist_ok=True)
 
-    host = os.getenv("FLASK_HOST", "127.0.0.1")
-    port = int(os.getenv("FLASK_PORT", "5000"))
-    default_redirect = f"http://127.0.0.1:{port}/callback"
-
     return Config(
         spotify_client_id=os.getenv("SPOTIFY_CLIENT_ID", "").strip(),
         spotify_client_secret=os.getenv("SPOTIFY_CLIENT_SECRET", "").strip(),
-        spotify_redirect_uri=os.getenv(
-            "SPOTIFY_REDIRECT_URI", default_redirect
-        ).strip(),
-        secret_key=os.getenv("FLASK_SECRET_KEY", "dev-secret-change-me"),
         download_dir=download_dir,
-        host=host,
-        port=port,
+        host=os.getenv("FLASK_HOST", "127.0.0.1"),
+        port=int(os.getenv("FLASK_PORT", "5000")),
         debug=_as_bool(os.getenv("FLASK_DEBUG"), default=False),
     )
