@@ -44,7 +44,7 @@ _MAX_BACKOFF_SECONDS = 8
 
 def resolve_playlist_via_embed(playlist_id: str) -> ResolvedLink:
     """Resolve a public playlist's full tracklist."""
-    name, token, embed_tracks = _read_embed(playlist_id)
+    name, token, embed_tracks, image_url = _read_embed(playlist_id)
 
     # Try to page the full list with the anonymous token. Fall back to the
     # embed's first 100 if it's unavailable.
@@ -53,11 +53,15 @@ def resolve_playlist_via_embed(playlist_id: str) -> ResolvedLink:
 
     if not tracks:
         raise SpotifyError("That playlist appears to have no public tracks.")
-    return ResolvedLink(kind=LinkKind.PLAYLIST, name=name, tracks=tracks)
+    return ResolvedLink(
+        kind=LinkKind.PLAYLIST, name=name, tracks=tracks, image_url=image_url
+    )
 
 
-def _read_embed(playlist_id: str) -> tuple[str, str | None, list[Track]]:
-    """Return (name, anon_token, first_100_tracks) from the embed page."""
+def _read_embed(
+    playlist_id: str,
+) -> tuple[str, str | None, list[Track], str | None]:
+    """Return (name, anon_token, first_100_tracks, cover_url) from the page."""
     url = _EMBED_URL.format(id=playlist_id)
     last_problem = "no data"
     for _ in range(_ATTEMPTS):
@@ -85,7 +89,10 @@ def _read_embed(playlist_id: str) -> tuple[str, str | None, list[Track]]:
             if t is not None
         ]
         token_match = _TOKEN_RE.search(resp.text)
-        return name, (token_match.group(1) if token_match else None), tracks
+        token = token_match.group(1) if token_match else None
+        sources = (entity.get("coverArt") or {}).get("sources") or []
+        image_url = sources[0].get("url") if sources else None
+        return name, token, tracks, image_url
 
     raise SpotifyError(
         f"Couldn't read this playlist after {_ATTEMPTS} tries "

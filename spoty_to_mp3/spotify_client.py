@@ -54,6 +54,7 @@ class ResolvedLink:
     kind: LinkKind
     name: str           # track title, or playlist/album name
     tracks: list[Track]
+    image_url: str | None = None   # cover art, if available
 
 
 # Matches both open.spotify.com URLs and spotify:track:... URIs.
@@ -143,9 +144,8 @@ class SpotifyClient:
         return resolve_playlist_via_embed(playlist_id)
 
     def _resolve_playlist_api(self, playlist_id: str) -> ResolvedLink:
-        name = self._sp.playlist(playlist_id, fields="name").get(
-            "name", "playlist"
-        )
+        info = self._sp.playlist(playlist_id, fields="name,images")
+        name = info.get("name", "playlist")
         tracks: list[Track] = []
         results = self._sp.playlist_items(playlist_id)
         while results:
@@ -156,12 +156,20 @@ class SpotifyClient:
                 if node and node.get("type") == "track":
                     tracks.append(_track_from_api(node))
             results = self._sp.next(results) if results.get("next") else None
-        return ResolvedLink(kind=LinkKind.PLAYLIST, name=name, tracks=tracks)
+        return ResolvedLink(
+            kind=LinkKind.PLAYLIST,
+            name=name,
+            tracks=tracks,
+            image_url=_first_image(info.get("images")),
+        )
 
     def _resolve_track(self, track_id: str) -> ResolvedLink:
         data = self._sp.track(track_id)
         track = _track_from_api(data)
-        return ResolvedLink(kind=LinkKind.TRACK, name=track.title, tracks=[track])
+        image = _first_image((data.get("album") or {}).get("images"))
+        return ResolvedLink(
+            kind=LinkKind.TRACK, name=track.title, tracks=[track], image_url=image
+        )
 
     def _resolve_album(self, album_id: str) -> ResolvedLink:
         album = self._sp.album(album_id)
@@ -175,7 +183,19 @@ class SpotifyClient:
             results = self._sp.next(results) if results.get("next") else None
         if not tracks:
             raise SpotifyError("That album has no tracks.")
-        return ResolvedLink(kind=LinkKind.ALBUM, name=name, tracks=tracks)
+        return ResolvedLink(
+            kind=LinkKind.ALBUM,
+            name=name,
+            tracks=tracks,
+            image_url=_first_image(album.get("images")),
+        )
+
+
+def _first_image(images: list[dict] | None) -> str | None:
+    """Return the first image URL from a Spotify images array, if any."""
+    if not images:
+        return None
+    return images[0].get("url")
 
 
 def _track_from_api(node: dict, album_name: str | None = None) -> Track:

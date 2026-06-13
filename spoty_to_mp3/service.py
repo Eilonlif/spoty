@@ -7,6 +7,7 @@ Progress is reported back through the JobRegistry so the UI can poll it.
 from __future__ import annotations
 
 import re
+import time
 import zipfile
 from pathlib import Path
 
@@ -50,7 +51,10 @@ def run_conversion(
 
         registry.update(
             job_id,
+            title=resolved.name,
+            image_url=resolved.image_url,
             total=len(resolved.tracks),
+            started_at=time.time(),
             message=f"Found {len(resolved.tracks)} track(s). Starting download...",
         )
 

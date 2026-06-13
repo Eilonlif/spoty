@@ -8,6 +8,11 @@ const statusMessage = document.getElementById("status-message");
 const statusPercent = document.getElementById("status-percent");
 const progressBar = document.getElementById("progress-bar");
 const downloadLink = document.getElementById("download-link");
+const meta = document.getElementById("meta");
+const metaArt = document.getElementById("meta-art");
+const metaTitle = document.getElementById("meta-title");
+const metaSub = document.getElementById("meta-sub");
+const etaEl = document.getElementById("eta");
 
 const POLL_MS = 1500;
 // How many consecutive polling failures (e.g. a server restart, a dropped
@@ -93,12 +98,44 @@ function updateProgress(job) {
   )}`;
   statusPercent.textContent = `${pct}%`;
   progressBar.style.width = `${pct}%`;
+  renderMeta(job);
+  etaEl.textContent = etaText(job);
+}
+
+// Show the cover art + title + track count once the link has resolved.
+function renderMeta(job) {
+  if (!job.title) return;
+  metaTitle.textContent = job.title;
+  const parts = [];
+  if (job.total) parts.push(`${job.total} track${job.total === 1 ? "" : "s"}`);
+  metaSub.textContent = parts.join(" · ");
+  if (job.image_url) {
+    metaArt.src = job.image_url;
+    metaArt.style.display = "";
+  } else {
+    metaArt.style.display = "none";
+  }
+  meta.classList.remove("hidden");
+}
+
+function etaText(job) {
+  if (job.eta_seconds == null) return "";
+  if (job.eta_seconds <= 0) return "Finishing up…";
+  return `~${formatDuration(job.eta_seconds)} remaining`;
+}
+
+function formatDuration(secs) {
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
 function finish(jobId, job) {
+  renderMeta(job);
   statusMessage.textContent = job.message || "Done!";
   statusPercent.textContent = "100%";
   progressBar.style.width = "100%";
+  etaEl.textContent = "";
   downloadLink.href = `/api/download/${jobId}`;
   downloadLink.textContent = `⬇ Download ${job.result_name || "file"}`;
   downloadLink.classList.remove("hidden");
@@ -122,6 +159,9 @@ function showError(message) {
 function resetStatus() {
   statusBox.classList.remove("error");
   downloadLink.classList.add("hidden");
+  meta.classList.add("hidden");
+  metaArt.removeAttribute("src");
+  etaEl.textContent = "";
 }
 
 function setBusy(busy) {

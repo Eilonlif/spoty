@@ -233,6 +233,41 @@ button:disabled,
   background: rgba(0, 0, 0, 0.2);
 }
 
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.meta-art {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
+}
+
+.meta-text {
+  min-width: 0;
+}
+
+.meta-title {
+  font-weight: 600;
+  font-size: 0.98rem;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.meta-sub {
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
 .status-head {
   display: flex;
   justify-content: space-between;
@@ -240,6 +275,14 @@ button:disabled,
   font-size: 0.88rem;
   color: var(--text-dim);
   margin-bottom: 12px;
+}
+
+.eta {
+  margin-top: 10px;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  min-height: 1em;
 }
 
 #status-percent {

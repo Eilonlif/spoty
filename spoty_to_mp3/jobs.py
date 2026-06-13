@@ -8,6 +8,7 @@ memory, which is fine for a single-process local app.
 from __future__ import annotations
 
 import threading
+import time
 import uuid
 from dataclasses import dataclass
 from enum import Enum
@@ -29,8 +30,11 @@ class Job:
     url: str
     status: JobStatus = JobStatus.PENDING
     message: str = "Queued"
+    title: str | None = None        # resolved track/playlist/album name
+    image_url: str | None = None    # cover art
     total: int = 0           # number of tracks
     completed: int = 0       # tracks finished
+    started_at: float | None = None  # when downloading began (time.time())
     result_path: Path | None = None
     result_name: str | None = None  # friendly download filename
     error: str | None = None
@@ -42,14 +46,32 @@ class Job:
             return 0
         return int(self.completed / self.total * 100)
 
+    @property
+    def eta_seconds(self) -> int | None:
+        """Estimated seconds remaining, from the average pace so far."""
+        if (
+            self.status is not JobStatus.RUNNING
+            or not self.started_at
+            or self.completed <= 0
+            or self.total <= 0
+        ):
+            return None
+        elapsed = time.time() - self.started_at
+        per_track = elapsed / self.completed
+        remaining = self.total - self.completed
+        return max(0, round(per_track * remaining))
+
     def to_dict(self) -> dict:
         return {
             "id": self.id,
             "status": self.status.value,
             "message": self.message,
+            "title": self.title,
+            "image_url": self.image_url,
             "total": self.total,
             "completed": self.completed,
             "progress": self.progress,
+            "eta_seconds": self.eta_seconds,
             "result_name": self.result_name,
             "error": self.error,
         }
