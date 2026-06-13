@@ -43,9 +43,9 @@
       {% else %}
       <span class="account-status">
         <span class="dot dot--off"></span> Not connected
-        <em>— needed for playlists</em>
+        <em>— only needed for your own private playlists</em>
       </span>
-      <a class="link-btn link-btn--primary" href="{{ url_for('login') }}">
+      <a class="link-btn" href="{{ url_for('login') }}">
         Connect Spotify
       </a>
       {% endif %}
