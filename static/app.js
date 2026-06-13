@@ -16,8 +16,9 @@ const etaEl = document.getElementById("eta");
 
 const POLL_MS = 1500;
 // How many consecutive polling failures (e.g. a server restart, a dropped
-// connection, an empty response) to tolerate before giving up.
-const MAX_POLL_RETRIES = 5;
+// connection, an empty response) to tolerate before giving up. Generous so a
+// brief hosting hiccup or cold start doesn't abandon a running job.
+const MAX_POLL_RETRIES = 15;
 let pollTimer = null;
 
 // Parse a fetch Response as JSON, tolerating empty/non-JSON bodies instead of
