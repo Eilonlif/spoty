@@ -1,0 +1,18 @@
+# Render Blueprint. In the Render dashboard: New > Blueprint, point it at this
+# repo, then set the two secret env vars below in the service's Environment tab.
+services:
+  - type: web
+    name: spoty-to-mp3
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: SPOTIFY_CLIENT_ID
+        sync: false   # set in dashboard (kept out of source control)
+      - key: SPOTIFY_CLIENT_SECRET
+        sync: false   # set in dashboard
+      - key: SPOTIFY_REDIRECT_URI
+        sync: false   # e.g. https://your-app.onrender.com/callback
+                      # add this EXACT value to your Spotify app's Redirect URIs
+      - key: FLASK_SECRET_KEY
+        generateValue: true   # Render generates a strong random value
