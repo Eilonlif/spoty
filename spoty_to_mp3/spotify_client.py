@@ -133,9 +133,13 @@ class SpotifyClient:
         # the logged-out case both fall back to the public embed page.
         if self._user_auth:
             try:
-                return self._resolve_playlist_api(playlist_id)
+                result = self._resolve_playlist_api(playlist_id)
+                if result.tracks:
+                    return result
             except spotipy.SpotifyException:
                 pass
+        # Non-owned playlist, logged out, or the API returned nothing: read
+        # the public embed page (capped at 100 tracks).
         return resolve_playlist_via_embed(playlist_id)
 
     def _resolve_playlist_api(self, playlist_id: str) -> ResolvedLink:
@@ -145,13 +149,13 @@ class SpotifyClient:
         tracks: list[Track] = []
         results = self._sp.playlist_items(playlist_id)
         while results:
-            for item in results["items"]:
-                node = item.get("track")
+            for entry in results["items"]:
+                # Spotify's /items migration renamed the per-entry field from
+                # "track" to "item"; accept either so both work.
+                node = entry.get("item") or entry.get("track")
                 if node and node.get("type") == "track":
                     tracks.append(_track_from_api(node))
             results = self._sp.next(results) if results.get("next") else None
-        if not tracks:
-            raise SpotifyError("That playlist has no playable tracks.")
         return ResolvedLink(kind=LinkKind.PLAYLIST, name=name, tracks=tracks)
 
     def _resolve_track(self, track_id: str) -> ResolvedLink:
