@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hmac
+import secrets
 import threading
 
 from flask import (
@@ -12,6 +14,7 @@ from flask import (
     render_template,
     request,
     send_file,
+    session,
     url_for,
 )
 
@@ -38,12 +41,21 @@ def index():
 @app.get("/login")
 def login():
     """Send the user to Spotify to authorize, then back to /callback."""
-    return redirect(auth.make_oauth(config).get_authorize_url())
+    # CSRF protection: tie this auth request to the browser session via an
+    # unguessable state that /callback must echo back.
+    state = secrets.token_urlsafe(32)
+    session["oauth_state"] = state
+    return redirect(auth.make_oauth(config).get_authorize_url(state=state))
 
 
 @app.get("/callback")
 def callback():
     """Exchange the auth code for a token, stored in the session."""
+    # Reject responses that don't match the state we issued at /login.
+    expected = session.pop("oauth_state", None)
+    got = request.args.get("state")
+    if not expected or not got or not hmac.compare_digest(expected, got):
+        abort(400, description="Invalid OAuth state.")
     if request.args.get("error"):
         return redirect(url_for("index"))
     code = request.args.get("code")
