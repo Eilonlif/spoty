@@ -357,3 +357,67 @@ button:disabled,
     transform: rotate(360deg);
   }
 }
+
+/* --- Phones --------------------------------------------------------------- */
+@media (max-width: 480px) {
+  body {
+    padding: 12px;
+    /* Anchor to the top so the keyboard doesn't shove content off-screen. */
+    align-content: start;
+  }
+
+  .card {
+    padding: 26px 18px;
+    border-radius: 16px;
+  }
+
+  .hero {
+    margin-bottom: 22px;
+  }
+
+  .logo {
+    width: 54px;
+    height: 54px;
+    font-size: 26px;
+    margin-bottom: 14px;
+  }
+
+  h1 {
+    font-size: 1.45rem;
+  }
+
+  .subtitle {
+    font-size: 0.9rem;
+  }
+
+  /* Stack the input above a full-width button — no more cramped side-by-side. */
+  .input-row {
+    flex-direction: column;
+  }
+
+  #url,
+  #submit-btn {
+    width: 100%;
+  }
+
+  #url {
+    /* 16px avoids iOS auto-zooming the page when the field is focused. */
+    font-size: 16px;
+  }
+
+  /* Stack the account row so the long hint and button don't collide. */
+  .account {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .link-btn {
+    text-align: center;
+  }
+
+  .meta-art {
+    width: 48px;
+    height: 48px;
+  }
+}
