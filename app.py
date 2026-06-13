@@ -60,6 +60,49 @@ def logout():
     return redirect(url_for("index"))
 
 
+@app.get("/api/diag")
+def diag():
+    """Probe what the current token can read. Pass ?url=<spotify playlist>.
+
+    Temporary diagnostic for the Development Mode 403 investigation.
+    """
+    import spotipy
+
+    from spoty_to_mp3.spotify_client import SpotifyClient, parse_link
+
+    token = auth.current_access_token(config)
+    if not token:
+        return jsonify(error="Not connected. Click Connect Spotify first."), 200
+    sp = SpotifyClient.from_token(token)._sp
+
+    url = request.args.get("url", "")
+    try:
+        _, pid = parse_link(url)
+    except Exception:
+        pid = "3yNXorluXHN102l7I8y00i"
+
+    def probe(fn):
+        try:
+            r = fn()
+            n = r.get("total") if isinstance(r, dict) else None
+            return {"ok": True, "total": n}
+        except spotipy.SpotifyException as exc:
+            return {"ok": False, "status": exc.http_status, "msg": exc.msg}
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": str(exc)}
+
+    return jsonify(
+        playlist_id=pid,
+        me=probe(lambda: sp.me()),
+        my_playlists=probe(lambda: sp.current_user_playlists(limit=1)),
+        playlist_meta=probe(lambda: sp.playlist(pid, fields="name")),
+        items_tracks_only=probe(
+            lambda: sp.playlist_items(pid, additional_types=("track",), limit=5)
+        ),
+        items_default=probe(lambda: sp.playlist_items(pid, limit=5)),
+    )
+
+
 @app.get("/api/me")
 def me():
     """Report which Spotify account the current session is connected as.

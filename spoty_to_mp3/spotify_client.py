@@ -146,16 +146,26 @@ class SpotifyClient:
         return ResolvedLink(kind=LinkKind.TRACK, name=track.title, tracks=[track])
 
     def _resolve_playlist(self, playlist_id: str) -> ResolvedLink:
-        playlist = self._sp.playlist(playlist_id, fields="name")
-        name = playlist.get("name", "playlist")
-        tracks: list[Track] = []
-        results = self._sp.playlist_items(playlist_id)
-        while results:
-            for item in results["items"]:
-                node = item.get("track")
-                if node and node.get("type") == "track":
-                    tracks.append(_track_from_api(node))
-            results = self._sp.next(results) if results.get("next") else None
+        # The API only returns items for playlists the user owns or
+        # collaborates on; others return 403. Fall back to the public embed
+        # page for those (see embed.resolve_playlist_via_embed).
+        try:
+            playlist = self._sp.playlist(playlist_id, fields="name")
+            name = playlist.get("name", "playlist")
+            tracks: list[Track] = []
+            results = self._sp.playlist_items(playlist_id)
+            while results:
+                for item in results["items"]:
+                    node = item.get("track")
+                    if node and node.get("type") == "track":
+                        tracks.append(_track_from_api(node))
+                results = self._sp.next(results) if results.get("next") else None
+        except spotipy.SpotifyException as exc:
+            if exc.http_status in (401, 403, 404):
+                from .embed import resolve_playlist_via_embed
+
+                return resolve_playlist_via_embed(playlist_id)
+            raise
         if not tracks:
             raise SpotifyError("That playlist has no playable tracks.")
         return ResolvedLink(kind=LinkKind.PLAYLIST, name=name, tracks=tracks)

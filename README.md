@@ -28,6 +28,19 @@ button (OAuth Authorization Code flow); once connected, playlists work.
 For this to work, the **Redirect URI** in your Spotify app dashboard must
 exactly match `SPOTIFY_REDIRECT_URI` (see below).
 
+### Playlists you don't own
+
+Spotify's API only returns a playlist's items for playlists you **own or
+collaborate on** — any other playlist returns `403 Forbidden` by design, even
+when logged in. For public playlists you don't own, the app falls back to
+reading the tracklist from Spotify's **public embed page** (no API), then
+downloads as usual.
+
+> Heads up: this whole app downloads audio matched from Spotify metadata,
+> which is contrary to Spotify's Developer Terms ("no facilitating downloads /
+> stream ripping") and may infringe copyright. It's intended as a personal
+> tool — use it accordingly.
+
 ## Project layout
 
 ```
