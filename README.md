@@ -52,11 +52,21 @@ The web layer starts a background thread per conversion and the browser polls
 - Spotify API credentials (free): create an app at
   <https://developer.spotify.com/dashboard>
 - For login (optional): in that app's settings add a **Redirect URI** of
-  `http://127.0.0.1:5000/callback` (local) and/or your deployed
+  `http://127.0.0.1:5050/callback` (local) and/or your deployed
   `https://your-app.onrender.com/callback`. The app is in Spotify
   "Development Mode" by default, so add your account under **User Management**.
 
 ## Run locally
+
+Running locally is the most reliable way to use the downloader — a home/
+residential IP isn't subject to the YouTube blocking that hits cloud hosts
+(see the hosting caveat below).
+
+**Easiest (macOS):** double-click **`run.command`**. On first run it sets up a
+virtual environment, installs dependencies, and (if needed) creates `.env` for
+you to fill in; after that it starts the app and opens your browser.
+
+**Manual:**
 
 ```bash
 pip install -r requirements.txt
@@ -65,8 +75,12 @@ cp .env.example .env
 # edit .env and fill in SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET
 
 python app.py
-# open http://127.0.0.1:5000
+# open http://127.0.0.1:5050
 ```
+
+> The app runs on port **5050** locally (not 5000 — macOS's AirPlay Receiver
+> uses 5000 and causes intermittent 403s). To log in locally, add
+> `http://127.0.0.1:5050/callback` to your Spotify app's Redirect URIs.
 
 ## Hosting caveat: YouTube blocks datacenter IPs
 
@@ -111,9 +125,9 @@ The included `Dockerfile` installs ffmpeg, so deploy as a **Docker** service.
 | ----------------------- | -------- | ----------- | --------------------------- |
 | `SPOTIFY_CLIENT_ID`     | yes      | —           | From the Spotify dashboard  |
 | `SPOTIFY_CLIENT_SECRET` | yes      | —           | From the Spotify dashboard  |
-| `SPOTIFY_REDIRECT_URI`  | login    | `http://127.0.0.1:5000/callback` | Must match the dashboard exactly |
+| `SPOTIFY_REDIRECT_URI`  | login    | `http://127.0.0.1:5050/callback` | Must match the dashboard exactly |
 | `FLASK_SECRET_KEY`      | login    | dev default | Signs session cookies; random in prod |
 | `DOWNLOAD_DIR`          | no       | `downloads` | Where finished files land   |
 | `FLASK_HOST`            | no       | `127.0.0.1` | Local dev only              |
-| `FLASK_PORT`            | no       | `5000`      | Local dev only              |
+| `FLASK_PORT`            | no       | `5050`      | Local dev only              |
 | `FLASK_DEBUG`           | no       | `0`         | Local dev only              |

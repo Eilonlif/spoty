@@ -48,7 +48,9 @@ def load_config() -> Config:
         download_dir = ROOT_DIR / download_dir
     download_dir.mkdir(parents=True, exist_ok=True)
 
-    port = int(os.getenv("FLASK_PORT", "5000"))
+    # Default to 5050, not 5000: macOS runs AirPlay Receiver on 5000, which
+    # collides and intermittently answers with 403.
+    port = int(os.getenv("FLASK_PORT", "5050"))
     default_redirect = f"http://127.0.0.1:{port}/callback"
 
     return Config(
