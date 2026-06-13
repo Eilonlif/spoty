@@ -109,6 +109,10 @@ class SpotifyClient:
         """Build a client from a user access token (enables playlists)."""
         return cls(spotipy.Spotify(auth=access_token))
 
+    def me(self) -> dict:
+        """Return the connected user's Spotify profile."""
+        return self._sp.me()
+
     def resolve(self, url: str) -> ResolvedLink:
         """Resolve a Spotify URL into its tracks."""
         kind, spotify_id = parse_link(url)

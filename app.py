@@ -60,6 +60,39 @@ def logout():
     return redirect(url_for("index"))
 
 
+@app.get("/api/me")
+def me():
+    """Report which Spotify account the current session is connected as.
+
+    Useful for diagnosing 403s: confirms the connected account matches the
+    one added to the app's Development Mode allowlist.
+    """
+    import spotipy
+
+    from spoty_to_mp3.spotify_client import SpotifyClient
+
+    token = auth.current_access_token(config)
+    if not token:
+        return jsonify(connected=False), 200
+    try:
+        profile = SpotifyClient.from_token(token).me()
+        return jsonify(
+            connected=True,
+            id=profile.get("id"),
+            display_name=profile.get("display_name"),
+            email=profile.get("email"),
+            product=profile.get("product"),
+        )
+    except spotipy.SpotifyException as exc:
+        return (
+            jsonify(
+                connected=True,
+                error=f"{exc.http_status} {exc.msg or exc}",
+            ),
+            200,
+        )
+
+
 @app.post("/api/convert")
 def convert():
     """Start a conversion job and return its id."""

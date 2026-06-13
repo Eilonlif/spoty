@@ -14,9 +14,12 @@ from spotipy.oauth2 import SpotifyOAuth
 
 from .config import Config
 
-# Scopes needed to read the user's own private/collaborative playlists.
-# Public playlists work with any valid user token; these cover the rest.
-SCOPE = "playlist-read-private playlist-read-collaborative"
+# Scopes: read private/collaborative playlists, plus profile/email so the
+# app can show which account is connected (helps match the allowlist).
+SCOPE = (
+    "playlist-read-private playlist-read-collaborative "
+    "user-read-email user-read-private"
+)
 
 _TOKEN_KEY = "spotify_token_info"
 
@@ -39,7 +42,10 @@ def make_oauth(config: Config) -> SpotifyOAuth:
         redirect_uri=config.spotify_redirect_uri,
         scope=SCOPE,
         cache_handler=FlaskSessionCacheHandler(),
-        show_dialog=False,
+        # Always show the account chooser so the user can pick the exact
+        # account that's on the app's allowlist (avoids silently reusing a
+        # different Spotify account already signed in to the browser).
+        show_dialog=True,
     )
 
 
