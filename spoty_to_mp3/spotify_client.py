@@ -82,14 +82,15 @@ def parse_link(url: str) -> tuple[LinkKind, str]:
 class SpotifyClient:
     """Thin wrapper around spotipy for the metadata we need.
 
-    Wraps an authenticated ``spotipy.Spotify`` built from app-only
-    credentials. Tracks and albums come from the API; playlists are read
-    from the public embed page (the API only serves items for playlists the
-    user owns, which this app doesn't log in for).
+    Tracks and albums come from the API. Playlists are read from the public
+    embed page, except when a logged-in user token is present — then the API
+    is tried first so playlists the user owns return their full tracklist
+    (the embed caps at 100); non-owned playlists fall back to the embed.
     """
 
-    def __init__(self, sp: "spotipy.Spotify") -> None:
+    def __init__(self, sp: "spotipy.Spotify", user_auth: bool = False) -> None:
         self._sp = sp
+        self._user_auth = user_auth
 
     @classmethod
     def from_client_credentials(
@@ -103,16 +104,18 @@ class SpotifyClient:
         auth = SpotifyClientCredentials(
             client_id=client_id, client_secret=client_secret
         )
-        return cls(spotipy.Spotify(auth_manager=auth))
+        return cls(spotipy.Spotify(auth_manager=auth), user_auth=False)
+
+    @classmethod
+    def from_token(cls, access_token: str) -> "SpotifyClient":
+        """Build a client from a logged-in user's access token."""
+        return cls(spotipy.Spotify(auth=access_token), user_auth=True)
 
     def resolve(self, url: str) -> ResolvedLink:
         """Resolve a Spotify URL into its tracks."""
         kind, spotify_id = parse_link(url)
         if kind is LinkKind.PLAYLIST:
-            # Read straight from the public embed page (no API auth needed).
-            from .embed import resolve_playlist_via_embed
-
-            return resolve_playlist_via_embed(spotify_id)
+            return self._resolve_playlist(spotify_id)
         try:
             if kind is LinkKind.TRACK:
                 return self._resolve_track(spotify_id)
@@ -121,6 +124,35 @@ class SpotifyClient:
             raise SpotifyError(f"Spotify API error: {exc.msg or exc}") from exc
 
     # -- per-kind resolvers -------------------------------------------------
+
+    def _resolve_playlist(self, playlist_id: str) -> ResolvedLink:
+        from .embed import resolve_playlist_via_embed
+
+        # Logged in: try the API first — playlists the user owns return their
+        # full tracklist. Anything the API refuses (403 non-owned, etc.) and
+        # the logged-out case both fall back to the public embed page.
+        if self._user_auth:
+            try:
+                return self._resolve_playlist_api(playlist_id)
+            except spotipy.SpotifyException:
+                pass
+        return resolve_playlist_via_embed(playlist_id)
+
+    def _resolve_playlist_api(self, playlist_id: str) -> ResolvedLink:
+        name = self._sp.playlist(playlist_id, fields="name").get(
+            "name", "playlist"
+        )
+        tracks: list[Track] = []
+        results = self._sp.playlist_items(playlist_id)
+        while results:
+            for item in results["items"]:
+                node = item.get("track")
+                if node and node.get("type") == "track":
+                    tracks.append(_track_from_api(node))
+            results = self._sp.next(results) if results.get("next") else None
+        if not tracks:
+            raise SpotifyError("That playlist has no playable tracks.")
+        return ResolvedLink(kind=LinkKind.PLAYLIST, name=name, tracks=tracks)
 
     def _resolve_track(self, track_id: str) -> ResolvedLink:
         data = self._sp.track(track_id)

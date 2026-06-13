@@ -27,19 +27,25 @@ def run_conversion(
     url: str,
     config: Config,
     registry: JobRegistry,
+    access_token: str | None = None,
 ) -> None:
     """Execute a conversion job end to end. Intended to run in a thread.
 
-    Tracks and albums are read from the Spotify API with app-only
-    credentials; playlists are read from the public embed page.
+    When ``access_token`` is given (a logged-in user), it is used so the API
+    can return the full tracklist of playlists the user owns. Otherwise
+    app-only credentials are used (and non-owned playlists fall back to the
+    public embed page).
     """
     try:
         registry.update(
             job_id, status=JobStatus.RUNNING, message="Reading Spotify link..."
         )
-        client = SpotifyClient.from_client_credentials(
-            config.spotify_client_id, config.spotify_client_secret
-        )
+        if access_token:
+            client = SpotifyClient.from_token(access_token)
+        else:
+            client = SpotifyClient.from_client_credentials(
+                config.spotify_client_id, config.spotify_client_secret
+            )
         resolved = client.resolve(url)
 
         registry.update(

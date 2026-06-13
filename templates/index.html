@@ -33,6 +33,25 @@
     </div>
     {% endif %}
 
+    {% if spotify_configured %}
+    <div class="account">
+      {% if logged_in %}
+      <span class="account-status">
+        <span class="dot dot--on"></span> Spotify connected
+      </span>
+      <a class="link-btn" href="{{ url_for('logout') }}">Disconnect</a>
+      {% else %}
+      <span class="account-status">
+        <span class="dot dot--off"></span> Not connected
+        <em>— connect to convert your own private playlists in full</em>
+      </span>
+      <a class="link-btn link-btn--primary" href="{{ url_for('login') }}">
+        Connect Spotify
+      </a>
+      {% endif %}
+    </div>
+    {% endif %}
+
     <form id="convert-form" autocomplete="off">
       <div class="input-row">
         <input

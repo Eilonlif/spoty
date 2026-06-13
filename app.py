@@ -4,8 +4,18 @@ from __future__ import annotations
 
 import threading
 
-from flask import Flask, abort, jsonify, render_template, request, send_file
+from flask import (
+    Flask,
+    abort,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    send_file,
+    url_for,
+)
 
+from spoty_to_mp3 import auth
 from spoty_to_mp3.config import load_config
 from spoty_to_mp3.jobs import JobRegistry, JobStatus
 from spoty_to_mp3.service import run_conversion
@@ -13,13 +23,40 @@ from spoty_to_mp3.service import run_conversion
 config = load_config()
 registry = JobRegistry()
 app = Flask(__name__)
+app.secret_key = config.secret_key
 
 
 @app.route("/")
 def index():
     return render_template(
-        "index.html", spotify_configured=config.spotify_configured
+        "index.html",
+        spotify_configured=config.spotify_configured,
+        logged_in=auth.is_logged_in(config),
     )
+
+
+@app.get("/login")
+def login():
+    """Send the user to Spotify to authorize, then back to /callback."""
+    return redirect(auth.make_oauth(config).get_authorize_url())
+
+
+@app.get("/callback")
+def callback():
+    """Exchange the auth code for a token, stored in the session."""
+    if request.args.get("error"):
+        return redirect(url_for("index"))
+    code = request.args.get("code")
+    if code:
+        # Caches the token in the Flask session via the cache handler.
+        auth.make_oauth(config).get_access_token(code, as_dict=False)
+    return redirect(url_for("index"))
+
+
+@app.get("/logout")
+def logout():
+    auth.logout()
+    return redirect(url_for("index"))
 
 
 @app.post("/api/convert")
@@ -38,10 +75,14 @@ def convert():
     if not url:
         return jsonify(error="Please paste a Spotify link."), 400
 
+    # Read the token here (request context); the worker thread can't access
+    # the session. None means not logged in (public content still works).
+    access_token = auth.current_access_token(config)
+
     job = registry.create(url)
     thread = threading.Thread(
         target=run_conversion,
-        args=(job.id, url, config, registry),
+        args=(job.id, url, config, registry, access_token),
         daemon=True,
     )
     thread.start()
